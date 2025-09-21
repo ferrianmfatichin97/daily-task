@@ -12,6 +12,8 @@ use Filament\Tables\Table;
 use App\Filament\Resources\TaskResource\RelationManagers\HistoriesRelationManager;
 use Filament\Infolists;
 use Filament\Infolists\Infolist;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 
 class TaskResource extends Resource
 {
@@ -196,6 +198,19 @@ class TaskResource extends Resource
                             ->columns(5),
                     ]),
             ]);
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+
+        $user = Auth::user();
+
+        if (! $user->hasRole(['manager', 'super_admin'])) {
+            $query->where('user_id', $user->id);
+        }
+
+        return $query;
     }
 
     public static function getRelations(): array
