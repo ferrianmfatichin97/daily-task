@@ -30,41 +30,55 @@ class TaskResource extends Resource
     public static function form(Form $form): Form
     {
         return $form->schema([
-            Forms\Components\TextInput::make('title')
-                ->label('Judul Tugas')
-                ->required()
-                ->maxLength(255)
-                ->columnSpanFull(),
+            Forms\Components\Section::make('Informasi Utama')
+                ->description('Detail tugas yang harus dikerjakan.')
+                ->schema([
+                    Forms\Components\TextInput::make('title')
+                        ->label('Judul Tugas')
+                        ->placeholder('Contoh: Laporan Mingguan Operasional')
+                        ->required()
+                        ->maxLength(255)
+                        ->columnSpanFull(),
 
-            Forms\Components\Textarea::make('description')
-                ->label('Deskripsi')
-                ->rows(4)
-                ->columnSpanFull(),
+                    Forms\Components\Textarea::make('description')
+                        ->label('Deskripsi Detail')
+                        ->rows(4)
+                        ->placeholder('Jelaskan rincian tugas di sini...')
+                        ->columnSpanFull(),
+                ])->columns(2),
 
-            Forms\Components\Select::make('status')
-                ->label('Status')
-                ->options([
-                    'todo' => 'To Do',
-                    'in_progress' => 'In Progress',
-                    'done' => 'Done',
-                ])
-                ->default('todo')
-                ->required()
-                ->columnSpan(1),
+            Forms\Components\Section::make('Atribut & Penugasan')
+                ->schema([
+                    Forms\Components\Select::make('status')
+                        ->label('Status Saat Ini')
+                        ->options([
+                            'todo' => 'To Do',
+                            'in_progress' => 'In Progress',
+                            'done' => 'Done',
+                        ])
+                        ->default('todo')
+                        ->required()
+                        ->native(false)
+                        ->prefixIcon('heroicon-m-tag')
+                        ->columnSpan(1),
 
-            Forms\Components\DatePicker::make('due_date')
-                ->label('Tenggat Waktu')
-                ->required()
-                ->columnSpan(1),
+                    Forms\Components\DatePicker::make('due_date')
+                        ->label('Tenggat Waktu')
+                        ->required()
+                        ->prefixIcon('heroicon-m-calendar')
+                        ->columnSpan(1),
 
-            Forms\Components\Select::make('user_id')
-                ->label('Dibuat Oleh')
-                ->relationship('user', 'name')
-                ->searchable()
-                ->preload()
-                ->required()
-                ->columnSpan(2),
-        ])->columns(2);
+                    Forms\Components\Select::make('user_id')
+                        ->label('Ditugaskan Ke')
+                        ->relationship('user', 'name')
+                        ->searchable()
+                        ->preload()
+                        ->required()
+                        ->prefixIcon('heroicon-m-user')
+                        ->default(fn() => auth()->id())
+                        ->columnSpanFull(),
+                ])->columns(2),
+        ]);
     }
 
     # ============================
@@ -75,42 +89,40 @@ class TaskResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('title')
-                    ->label('Judul')
+                    ->label('Judul Tugas')
                     ->searchable()
                     ->sortable()
+                    ->description(fn(Task $record) => \Illuminate\Support\Str::limit($record->description, 50))
                     ->wrap(),
 
-                Tables\Columns\TextColumn::make('status')
+                Tables\Columns\SelectColumn::make('status')
                     ->label('Status')
-                    ->badge()
-                    ->sortable()
-                    ->colors([
-                        'danger' => 'todo',         // merah
-                        'warning' => 'in_progress', // kuning
-                        'success' => 'done',        // hijau
-                    ])
-                    ->formatStateUsing(fn($state) => match ($state) {
+                    ->options([
                         'todo' => 'To Do',
                         'in_progress' => 'In Progress',
                         'done' => 'Done',
-                        default => ucfirst($state),
-                    }),
-
+                    ])
+                    ->selectablePlaceholder(false)
+                    ->sortable(),
 
                 Tables\Columns\TextColumn::make('due_date')
                     ->label('Tenggat')
-                    ->date()
-                    ->sortable(),
+                    ->date('d M Y')
+                    ->sortable()
+                    ->color(fn(Task $record) => $record->due_date < now() && $record->status !== 'done' ? 'danger' : 'gray')
+                    ->icon(fn(Task $record) => $record->due_date < now() && $record->status !== 'done' ? 'heroicon-m-exclamation-triangle' : null),
 
                 Tables\Columns\TextColumn::make('user.name')
-                    ->label('Dibuat Oleh')
+                    ->label('PIC')
                     ->badge()
+                    ->color('info')
                     ->sortable()
                     ->searchable(),
 
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Dibuat')
                     ->dateTime('d M Y H:i')
+                    ->toggleable(isToggledHiddenByDefault: true)
                     ->sortable(),
             ])
             ->filters([
@@ -123,7 +135,7 @@ class TaskResource extends Resource
                     ]),
 
                 Tables\Filters\SelectFilter::make('user')
-                    ->label('User')
+                    ->label('Karyawan')
                     ->relationship('user', 'name')
                     ->preload()
 
@@ -132,15 +144,14 @@ class TaskResource extends Resource
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
                 Tables\Actions\DeleteAction::make()
-                    ->visible(fn() => auth()->user()?->email === 'admin@bankdptaspen.co.id'),
+                    ->visible(fn() => auth()->user()->hasRole(['super_admin', 'gm', 'manager'])),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make()
-                        ->visible(fn () => auth()->user()?->email === 'admin@bankdptaspen.co.id'),
+                        ->visible(fn() => auth()->user()->hasRole(['super_admin', 'gm', 'manager'])),
                 ]),
             ])
-
             ->defaultSort('created_at', 'desc');
     }
 
@@ -203,14 +214,16 @@ class TaskResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery();
-
         $user = Auth::user();
 
-        if (! $user->hasRole(['manager', 'super_admin'])) {
-            $query->where('user_id', $user->id);
+        // GM dan Manager bisa melihat semua data divisi operasional
+        // Super Admin selalu bisa melihat semua
+        if ($user->hasRole(['super_admin', 'gm', 'manager'])) {
+            return $query;
         }
 
-        return $query;
+        // Staff hanya bisa melihat data miliknya sendiri
+        return $query->where('user_id', $user->id);
     }
 
     public static function getRelations(): array

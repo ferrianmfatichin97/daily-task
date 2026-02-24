@@ -13,8 +13,10 @@ class DatabaseSeeder extends Seeder
     {
         // 1️⃣ Buat role
         $superAdmin = Role::firstOrCreate(['name' => 'super_admin', 'guard_name' => 'web']);
+        $gm         = Role::firstOrCreate(['name' => 'gm', 'guard_name' => 'web']);
         $manager    = Role::firstOrCreate(['name' => 'manager', 'guard_name' => 'web']);
-        $employee   = Role::firstOrCreate(['name' => 'employee', 'guard_name' => 'web']);
+        $staff      = Role::firstOrCreate(['name' => 'staff', 'guard_name' => 'web']);
+        $hrd        = Role::firstOrCreate(['name' => 'hrd', 'guard_name' => 'web']);
 
         // 2️⃣ Generate permission via Shield (kalau masih kosong)
         if (Permission::count() === 0) {
@@ -23,13 +25,15 @@ class DatabaseSeeder extends Seeder
 
         // 3️⃣ Assign permission
         $superAdmin->givePermissionTo(Permission::all());
-        $employee->givePermissionTo([
-            'view_task', 'view_any_task',
+        $gm->givePermissionTo(Permission::all());
+        $manager->givePermissionTo(Permission::all());
+        $staff->givePermissionTo([
+            'view_task', 'view_any_task', 'create_task', 'update_task',
         ]);
 
         // 4️⃣ Super Admin
         $admin = User::firstOrCreate(
-            ['email' => 'admin@bankdptaspen.co.id'],
+            ['email' => 'adminsuper@bankdptaspen.co.id'],
             [
                 'name' => 'Super Admin',
                 'password' => bcrypt('password'),
@@ -49,10 +53,11 @@ class DatabaseSeeder extends Seeder
 
         // 6️⃣ Employees
         $employees = [
-            ['name' => 'Hendrik', 'email' => 'hendrik@bankdptaspen.co.id'],
-            ['name' => 'Angga',   'email' => 'angga@bankdptaspen.co.id'],
-            ['name' => 'Fani',    'email' => 'fani@bankdptaspen.co.id'],
-            ['name' => 'Oliv',    'email' => 'oliv@bankdptaspen.co.id'],
+            ['name' => 'Dicky Hendrik', 'email' => 'hendrik@bankdptaspen.co.id'],
+            ['name' => 'Erlangga Ahmad',   'email' => 'erlangga@bankdptaspen.co.id'],
+            ['name' => 'Jonathan Yasi',    'email' => 'jonathan@bankdptaspen.co.id'],
+            ['name' => 'Anggi Anggreani',    'email' => 'anggi@bankdptaspen.co.id'],
+            ['name' => 'Olivia Regina Sebayang',    'email' => 'olivia@bankdptaspen.co.id'],
         ];
 
         foreach ($employees as $emp) {
@@ -63,7 +68,17 @@ class DatabaseSeeder extends Seeder
                     'password' => bcrypt('12345678'),
                 ]
             );
-            $user->assignRole($employee);
+            $user->assignRole($staff);
         }
+
+        // 7️⃣ GM User (Contoh)
+        $gmUser = User::firstOrCreate(
+            ['email' => 'fauzihasan@bankdptaspen.co.id'],
+            [
+                'name' => 'Fauzi Hasan',
+                'password' => bcrypt('12345678'),
+            ]
+        );
+        $gmUser->assignRole($gm);
     }
 }

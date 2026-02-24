@@ -25,8 +25,7 @@ class TaskHistories extends Page implements HasTable
     {
         $user = auth()->user();
 
-        return $user && $user->email === 'admin@bankdptaspen.co.id';
-        
+        return $user && $user->hasRole(['super_admin', 'gm', 'manager']);
     }
 
     public function table(Table $table): Table
